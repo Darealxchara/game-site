@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Новелла (перед Новым годом) — играй в браузере</title>
+<meta name="description" content="Визуальная новелла от xchara: зимняя атмосфера, выборы и несколько концовок. Бесплатно в браузере, без установки.">
+<meta property="og:title" content="Новелла (перед Новым годом)">
+<meta property="og:description" content="Визуальная новелла от xchara — играй бесплатно в браузере, без установки.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+
+<!-- ===== НАСТРОЙКИ ИГРЫ =====
+     Здесь правите название, описание и ссылки. Ничего больше менять не нужно. -->
+<script>
+const GAME = {
+  title:    "Новелла (перед Новым годом)",
+  tagline:  "Визуальная новелла от xchara — 3 месяца разработки, зимняя атмосфера и выборы, которые меняют сюжет.",
+  version:  "1.0",
+  build:    "project.html",   // путь к экспорту из TurboWarp (локально)
+  zip:      "game.zip",   // путь к архиву для скачивания (может не быть)
+  // Игра разбита на части: GitHub Pages не принимает файлы больше 25 МБ.
+  // Сайт сам собирает их обратно в один файл в браузере.
+  parts:    ["game.part1.html", "game.part2.html", "game.part3.html"],
+  downloadName: "Новелла (перед Новым годом).html",
+  itch:     "",                    // ссылка на itch.io, пусто = не показывать
+  github:   "",                    // ссылка на репозиторий, пусто = не показывать
+  features: [
+    ["Играй прямо в браузере", "Открыл страницу — и читаешь. Ничего устанавливать не нужно."],
+    ["Выборы и концовки",      "От твоих решений зависит, чем закончится история."],
+    ["Зимняя атмосфера",       "Снег, гирлянды и тёплые вечера перед Новым годом."]
+  ],
+  shots: [
+    "1.png",
+    "2.png",
+    "3.png"
+  ]
+};
+</script>
+
+<header class="topbar">
+  <a class="brand" href="#top">
+    <span class="dot"></span>
+    <span class="brand-name" data-title>Название игры</span>
+  </a>
+  <nav class="nav">
+    <a href="#about">О игре</a>
+    <a href="#shots">Скриншоты</a>
+    <a href="#download">Скачать</a>
+  </nav>
+  <button class="btn btn-sm" data-play>Играть</button>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="glow"></div>
+    <div class="hero-inner">
+      <span class="pill">Версия <b data-version>1.0</b> · игра в браузере</span>
+      <h1 data-title>Название игры</h1>
+      <p class="tagline" data-tagline>Короткий слоган, который заставит нажать «Играть»</p>
+
+      <div class="cta">
+        <button class="btn btn-lg btn-primary" data-play>
+          ▶ Играть в браузере
+        </button>
+        <a class="btn btn-lg btn-ghost" data-download href="#download">
+          ⬇ Скачать файл
+        </a>
+      </div>
+
+      <p class="hint" data-buildhint>
+        Игра запускается прямо на этой странице — без установки и регистрации.
+      </p>
+    </div>
+  </section>
+
+  <section class="section" id="about">
+    <h2>О игре</h2>
+    <div class="cards" data-features></div>
+  </section>
+
+  <section class="section alt" id="shots">
+    <h2>Скриншоты</h2>
+    <div class="shots" data-shots></div>
+  </section>
+
+  <section class="section" id="download">
+    <h2>Как запустить</h2>
+    <ol class="steps">
+      <li><b>Нажми «Играть в браузере»</b> — игра откроется прямо на этой странице.</li>
+      <li><b>Если кнопка неактивна</b> — сборка ещё не загружена на сайт.</li>
+      <li><b>Для офлайна</b> — скачай архив и открой <code>index.html</code> в браузере.</li>
+    </ol>
+    <div class="cta center">
+      <button class="btn btn-lg btn-primary" data-play>▶ Играть</button>
+      <a class="btn btn-lg btn-ghost" data-download href="#">⬇ Скачать</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div>
+    <b data-title>Название игры</b>
+    <span data-copy></span>
+  </div>
+  <div class="links">
+    <a data-itch hidden href="#">itch.io</a>
+    <a data-github hidden href="#">GitHub</a>
+  </div>
+</footer>
+
+<!-- ===== ОКНО ИГРЫ ===== -->
+<div class="player" id="player" hidden>
+  <div class="player-bar">
+    <span class="player-title" data-title>Название игры</span>
+    <div class="player-actions">
+      <button class="btn btn-sm" id="fsBtn" title="На весь экран">⛶</button>
+      <button class="btn btn-sm" id="closeBtn" title="Закрыть (Esc)">✕</button>
+    </div>
+  </div>
+  <div class="stage">
+    <iframe id="frame" allow="fullscreen; gamepad; autoplay" title="Игра"></iframe>
+    <div class="loader" id="loader">Загрузка игры…</div>
+    <div class="error" id="errorBox" hidden>
+      <b>Сборка ещё не загружена</b>
+      <p>Файл <code data-buildpath></code> отсутствует.</p>
+      <p>Положи экспорт игры из TurboWarp в папку <code>game/</code> с именем
+         <code>project.html</code> — и кнопка заработает.</p>
+      <button class="btn btn-sm" id="retryBtn">Повторить</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
