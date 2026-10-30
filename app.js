@@ -97,14 +97,81 @@
     });
   }
 
-  // Собираем части обратно в один файл и отдаём его как blob-адрес
-  function assemble() {
+  // Собираем части обратно в один файл и отдаём его как blob-адрес.
+  // onProgress(percent, doneParts, totalParts) — проценты по ходу загрузки.
+  function assemble(onProgress) {
     return discoverParts().then(function (list) {
       if (!list || !list.length) return null;
-      return Promise.all(list.map(function (p) {
-        // cache:no-cache — после обновления сразу берём свежие куски
-        return fetch(p, { cache: "no-cache" }).then(function (r) { return r.arrayBuffer(); });
-      })).then(function (bufs) {
+      var n = list.length;
+      var sizes = [], read = [], done = [];
+      for (var i = 0; i < n; i++) { sizes.push(0); read.push(0); done.push(false); }
+      var finished = 0, lastPct = 0, ratio = 0; // ratio = исходный размер / размер на сервере (gzip)
+
+      function report() {
+        if (!onProgress) return;
+        var known = 0, knownSum = 0;
+        for (var i = 0; i < n; i++) if (sizes[i]) { known++; knownSum += sizes[i]; }
+        var equal = !known;                 // нет Content-Length — считаем части поровну
+        var avg = known ? knownSum / known : 0;
+        var k = ratio || 1.25;              // пока не узнали точный коэффициент — оценка
+        var expect = 0, sum = 0;
+        for (var i = 0; i < n; i++) {
+          var exp = equal ? 1 : (sizes[i] ? sizes[i] * k : avg * k);
+          expect += exp;
+          sum += done[i] ? exp : Math.min(read[i], exp);
+        }
+        var pct = expect > 0 ? Math.round((sum / expect) * 100) : 0;
+        if (pct > 99 && finished < n) pct = 99;   // 100% только когда всё готово
+        if (pct < lastPct) pct = lastPct;          // проценты не уходят назад
+        lastPct = pct;
+        onProgress(pct, finished, n);
+      }
+
+      function loadOne(idx) {
+        return fetch(list[idx], { cache: "no-cache" }).then(function (r) {
+          var cl = Number(r.headers.get("content-length") || 0);
+          if (cl) sizes[idx] = cl;
+
+          function finish(len) {
+            read[idx] = len;
+            if (sizes[idx] && !ratio) ratio = len / sizes[idx]; // уточняем коэффициент
+            done[idx] = true;
+            finished++;
+            report();
+          }
+
+          if (!r.body || !r.body.getReader) {
+            // старый браузер — без прогресса по байтам
+            return r.arrayBuffer().then(function (ab) { finish(ab.byteLength); return ab; });
+          }
+
+          var reader = r.body.getReader(), chunks = [], len = 0;
+          function pump() {
+            return reader.read().then(function (res) {
+              if (res.done) {
+                finish(len);
+                var out = new Uint8Array(len), off = 0;
+                for (var i = 0; i < chunks.length; i++) {
+                  out.set(chunks[i], off); off += chunks[i].length;
+                }
+                return out;
+              }
+              chunks.push(res.value);
+              len += res.value.length;
+              read[idx] = len;
+              report();
+              return pump();
+            });
+          }
+          return pump();
+        });
+      }
+
+      var jobs = [];
+      for (var j = 0; j < n; j++) jobs.push(loadOne(j));
+      report();
+      return Promise.all(jobs).then(function (bufs) {
+        if (onProgress) onProgress(100, n, n);
         return URL.createObjectURL(new Blob(bufs, { type: "text/html;charset=utf-8" }));
       });
     });
@@ -153,7 +220,9 @@
       b.dataset.busy = "1";
       var old = b.textContent;
       b.textContent = "Собираем файл…";
-      assemble().then(function (url) {
+      assemble(function (pct) {
+        b.textContent = "Собираем файл… " + pct + "%";
+      }).then(function (url) {
         if (!url) {
           b.textContent = old;
           delete b.dataset.busy;
@@ -183,28 +252,75 @@
       loader  = $("#loader"),
       errorBox= $("#errorBox");
 
+  /* --- фразы разработчика поверх загрузчика --- */
+  var PHRASES = [
+    "Спасибо что играете!",
+    "надеюсь кто то сделает ролик про мою игру",
+    "эту игру я делал каждый день по вечерам!",
+    "дискорд разработчика - xxcharra"
+  ];
+  var phraseTimer = null, phraseIdx = 0;
+
+  function startPhrases() {
+    phraseIdx = Math.floor(Math.random() * PHRASES.length);
+    var el = $("#ldPhrase");
+    el.textContent = PHRASES[phraseIdx];
+    el.style.opacity = "1";
+    if (phraseTimer) clearInterval(phraseTimer);
+    phraseTimer = setInterval(function () {
+      phraseIdx = (phraseIdx + 1) % PHRASES.length;
+      el.style.opacity = "0";                 // плавная смена
+      setTimeout(function () {
+        el.textContent = PHRASES[phraseIdx];
+        el.style.opacity = "1";
+      }, 220);
+    }, 3200);
+  }
+
+  function stopPhrases() {
+    if (phraseTimer) { clearInterval(phraseTimer); phraseTimer = null; }
+  }
+
+  /* --- проценты загрузки --- */
+  function setProgress(pct, sub) {
+    var p = $("#ldPct"), f = $("#ldFill"), s = $("#ldSub");
+    if (p) p.textContent = pct + "%";
+    if (f) f.style.width = pct + "%";
+    if (s && sub) s.textContent = sub;
+  }
+
   function openPlayer() {
     player.hidden = false;
     document.body.style.overflow = "hidden";
     loader.hidden = false;
     errorBox.hidden = true;
+    startPhrases();
+    setProgress(0, "Загрузка игры…");
 
     checkBuild().then(function (ok) {
       if (!ok) {
         loader.hidden = true;
         errorBox.hidden = false;
+        stopPhrases();
         return;
       }
       if (mode === "parts") {
         // Собираем файл из частей прямо в браузере
-        assemble().then(function (url) {
+        assemble(function (pct, doneParts, totalParts) {
+          setProgress(pct, totalParts > 1
+            ? "Часть " + Math.min(doneParts + 1, totalParts) + " из " + totalParts
+            : "Загрузка игры…");
+        }).then(function (url) {
           gameUrl = url;
+          setProgress(100, "Запуск игры…");
           frame.src = url;
         }).catch(function () {
           loader.hidden = true;
           errorBox.hidden = false;
+          stopPhrases();
         });
       } else {
+        setProgress(0, "Загрузка игры…");
         frame.src = GAME.build;
       }
     });
@@ -215,11 +331,12 @@
   function closePlayer() {
     player.hidden = true;
     frame.src = "about:blank";   // останавливаем звук игры
+    stopPhrases();
     if (gameUrl) { URL.revokeObjectURL(gameUrl); gameUrl = null; }
     document.body.style.overflow = "";
   }
 
-  frame.addEventListener("load", function () { loader.hidden = true; });
+  frame.addEventListener("load", function () { loader.hidden = true; stopPhrases(); });
   $("#closeBtn").addEventListener("click", closePlayer);
   $("#retryBtn").addEventListener("click", function () { available = null; openPlayer(); });
 

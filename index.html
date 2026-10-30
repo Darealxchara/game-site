@@ -129,7 +129,12 @@ const GAME = {
   </div>
   <div class="stage">
     <iframe id="frame" allow="fullscreen; gamepad; autoplay" title="Игра"></iframe>
-    <div class="loader" id="loader">Загрузка игры…</div>
+    <div class="loader" id="loader">
+      <div class="ld-phrase" id="ldPhrase">Спасибо что играете!</div>
+      <div class="ld-pct" id="ldPct">0%</div>
+      <div class="ld-bar"><span id="ldFill"></span></div>
+      <div class="ld-sub" id="ldSub">Загрузка игры…</div>
+    </div>
     <div class="error" id="errorBox" hidden>
       <b>Сборка ещё не загружена</b>
       <p>Файл <code data-buildpath></code> отсутствует.</p>
