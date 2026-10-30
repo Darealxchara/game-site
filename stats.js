@@ -36,6 +36,10 @@
     firstVisit = Date.now();
   }
 
+  /* --- браузер разработчика: не считается посетителем --- */
+  var isOwner = false;
+  try { isOwner = localStorage.getItem("gs_owner") === "1"; } catch (e) {}
+
   /* --- подключение --- */
   var client = null;
   var starting = false;
@@ -95,7 +99,7 @@
         connectTimeout: 10000,
         reconnectPeriod: 5000,
         keepalive: 30,
-        will: { topic: PREFIX + uid, payload: ownOffline(), qos: 0, retain: true }
+        will: { topic: PREFIX + uid, payload: isOwner ? "" : ownOffline(), qos: 0, retain: true }
       });
     } catch (e) {
       tryBroker(idx + 1);
@@ -113,7 +117,12 @@
       done = true;
       clearTimeout(to);
       client = c;
-      startHeartbeat(c);
+      if (isOwner) {
+        // разработчик: стираем свою прошлую запись и не пингуем
+        try { c.publish(PREFIX + uid, "", { qos: 0, retain: true }); } catch (e) {}
+      } else {
+        startHeartbeat(c);
+      }
       flush(null);
     });
     c.on("error", function () {
@@ -158,7 +167,8 @@
             if (last > 0 && now - last < ONLINE_WINDOW_MS) online++;
           }
           // если своя запись ещё не вернулась — считаем себя
-          if (!Object.prototype.hasOwnProperty.call(snapshot, uid)) {
+          // (кроме браузера разработчика — его не считаем)
+          if (!isOwner && !Object.prototype.hasOwnProperty.call(snapshot, uid)) {
             total++;
             online++;
           }
@@ -168,11 +178,46 @@
     });
   }
 
+  /* --- переключатель «считать/не считать этот браузер» --- */
+  function applyOwnerState() {
+    if (isOwner) {
+      if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+      var c = client;
+      if (c) {
+        // стираем свою запись и переподключимся без «последнего сообщения»
+        client = null;
+        starting = false;
+        try { c.publish(PREFIX + uid, "", { qos: 0, retain: true }); } catch (e) {}
+        setTimeout(function () { try { c.end(true); } catch (e) {} }, 400);
+      }
+    } else if (client) {
+      startHeartbeat(client);
+    }
+  }
+
+  function setOwner(v) {
+    isOwner = !!v;
+    try {
+      if (isOwner) localStorage.setItem("gs_owner", "1");
+      else localStorage.removeItem("gs_owner");
+    } catch (e) {}
+    applyOwnerState();
+  }
+
+  // если флаг поменяли в другой вкладке этого же сайта
+  window.addEventListener("storage", function (e) {
+    if (e.key !== "gs_owner") return;
+    isOwner = (e.newValue === "1");
+    applyOwnerState();
+  });
+
   /* --- сразу начинаем пинговать, чтобы сайт видел нас в «онлайн» --- */
   ensure(function () {});
 
   window.SITE_STATS = {
     uid: uid,
-    read: read
+    read: read,
+    setOwner: setOwner,
+    isOwner: function () { return isOwner; }
   };
 })();

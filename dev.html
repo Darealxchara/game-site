@@ -181,6 +181,9 @@ input[type=file]::file-selector-button{
 .ok{color:var(--acc);font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 .footer-note{margin-top:34px;color:#3f7a5a;font-size:13px;text-align:center}
+.own{display:flex;gap:8px;align-items:center;margin-top:14px;color:var(--muted);font-size:13px;cursor:pointer}
+.own input{accent-color:#00ff88;width:16px;height:16px;cursor:pointer}
+.own input:checked+span{color:#9be8c0}
 </style>
 <script src="stats.js"></script>
 </head>
@@ -339,6 +342,10 @@ input[type=file]::file-selector-button{
       <div class="num" id="stStatus" style="font-size:26px;padding-top:10px">…</div>
       <div class="lbl">Обновление статистики</div>
       <div class="sub">автообновление каждые 15 секунд</div>
+      <label class="own" title="Твой браузер не участвует в счётчиках: ни «всего», ни «сейчас»">
+        <input type="checkbox" id="ownExclude" checked>
+        Не считать мой браузер посетителем
+      </label>
     </div>
   </div>
 
@@ -408,7 +415,15 @@ function sha256hex(str) {
 function unlock() {
   $("#gate").hidden = true;
   $("#app").hidden = false;
+  // вошедший разработчик не считается посетителем
+  if (window.SITE_STATS && SITE_STATS.setOwner) SITE_STATS.setOwner(true);
+  syncOwner();
   startStats();
+}
+
+function syncOwner() {
+  var ex = window.SITE_STATS && SITE_STATS.isOwner ? SITE_STATS.isOwner() : false;
+  $("#ownExclude").checked = ex;
 }
 
 try {
@@ -694,6 +709,11 @@ function publish(file) {
   });
 }
 
+$("#ownExclude").addEventListener("change", function () {
+  if (window.SITE_STATS && SITE_STATS.setOwner) SITE_STATS.setOwner(this.checked);
+});
+
+syncOwner();
 syncToken();
 </script>
 </body>
