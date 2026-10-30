@@ -308,7 +308,7 @@
         // Собираем файл из частей прямо в браузере
         assemble(function (pct, doneParts, totalParts) {
           setProgress(pct, totalParts > 1
-            ? "Часть " + Math.min(doneParts + 1, totalParts) + " из " + totalParts
+            ? "Загружено частей: " + doneParts + " из " + totalParts
             : "Загрузка игры…");
         }).then(function (url) {
           gameUrl = url;
