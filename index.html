@@ -63,6 +63,8 @@ const GAME = {
       <h1 data-title>Название игры</h1>
       <p class="tagline" data-tagline>Короткий слоган, который заставит нажать «Играть»</p>
 
+      <div class="demo-note">Это демо версия, полная выйдет <b>30 декабря</b></div>
+
       <div class="cta">
         <button class="btn btn-lg btn-primary" data-play>
           ▶ Играть в браузере
@@ -75,6 +77,7 @@ const GAME = {
       <p class="hint" data-buildhint>
         Игра запускается прямо на этой странице — без установки и регистрации.
       </p>
+      <p class="hint" data-updated hidden></p>
     </div>
   </section>
 
@@ -111,6 +114,7 @@ const GAME = {
   <div class="links">
     <a data-itch hidden href="#">itch.io</a>
     <a data-github hidden href="#">GitHub</a>
+    <a href="dev.html">Разработчик</a>
   </div>
 </footer>
 
@@ -136,6 +140,7 @@ const GAME = {
   </div>
 </div>
 
+<script src="stats.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

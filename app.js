@@ -46,9 +46,14 @@
     swrap.appendChild(fig);
   });
 
-  /* ---------- 4. Где лежит сборка: части или один файл ---------- */
+  /* ---------- 4. Где лежит сборка: динамический поиск частей ----------
+     Игра лежит на сайте кусками: game.part1.html, game.part2.html, …
+     Сайт сам перебирает номера, пока куски не кончатся. Поэтому обновление
+     с панели разработчика может быть любым по размеру — просто залей новый
+     набор кусков, и всё соберётся заново. */
   var available = null; // null = не проверяли
   var mode = null;      // 'parts' = собирать из частей, 'file' = один файл
+  var partList = null;   // найденные куски
 
   function probe(url) {
     return fetch(url, { method: "HEAD" })
@@ -56,37 +61,52 @@
       .catch(function () { return null; }); // null = нет сети или file://
   }
 
-  function checkBuild() {
-    if (available !== null) return Promise.resolve(available);
-    var probes = [];
-    if (GAME.parts && GAME.parts.length) probes.push(GAME.parts[0]);
-    if (GAME.build) probes.push(GAME.build);
-    var i = 0, sawError = false;
-
+  function discoverParts() {
+    if (partList !== null) return Promise.resolve(partList);
+    var found = [], n = 1, MAX = 80;
     function next() {
-      if (i >= probes.length) {
-        // Ни один адрес не ответил (file:// и похожее) — считаем, что всё ок
-        if (mode === null && sawError) { mode = "file"; available = true; }
-        else available = (mode !== null);
-        return Promise.resolve(available);
-      }
-      var url = probes[i++];
-      return probe(url).then(function (ok) {
-        if (ok === null) sawError = true;
-        else if (ok) { mode = (url === GAME.build) ? "file" : "parts"; return true; }
-        return next();
+      if (n > MAX) { partList = found; return Promise.resolve(found); }
+      var name = "game.part" + n + ".html";
+      return probe(name).then(function (ok) {
+        if (ok === true) { found.push(name); n++; return next(); }
+        if (ok === null) {
+          // нечем проверять (file://) — берём список из настроек
+          partList = (GAME.parts && GAME.parts.length) ? GAME.parts.slice() : [];
+          return partList;
+        }
+        partList = found; // 404 — конец списка
+        return found;
       });
     }
     return next();
   }
 
+  function checkBuild() {
+    if (available !== null) return Promise.resolve(available);
+    if (window.location.protocol === "file:") {
+      mode = "file"; available = true;
+      return Promise.resolve(true);
+    }
+    return discoverParts().then(function (list) {
+      if (list && list.length) { mode = "parts"; available = true; return true; }
+      return probe(GAME.build).then(function (ok) {
+        if (ok === null || ok === true) { mode = "file"; available = true; return true; }
+        available = false; // ни частей, ни файла — покажем подсказку
+        return false;
+      });
+    });
+  }
+
   // Собираем части обратно в один файл и отдаём его как blob-адрес
   function assemble() {
-    if (!GAME.parts || !GAME.parts.length) return Promise.resolve(null);
-    return Promise.all(GAME.parts.map(function (p) {
-      return fetch(p).then(function (r) { return r.arrayBuffer(); });
-    })).then(function (bufs) {
-      return URL.createObjectURL(new Blob(bufs, { type: "text/html;charset=utf-8" }));
+    return discoverParts().then(function (list) {
+      if (!list || !list.length) return null;
+      return Promise.all(list.map(function (p) {
+        // cache:no-cache — после обновления сразу берём свежие куски
+        return fetch(p, { cache: "no-cache" }).then(function (r) { return r.arrayBuffer(); });
+      })).then(function (bufs) {
+        return URL.createObjectURL(new Blob(bufs, { type: "text/html;charset=utf-8" }));
+      });
     });
   }
 
@@ -134,6 +154,12 @@
       var old = b.textContent;
       b.textContent = "Собираем файл…";
       assemble().then(function (url) {
+        if (!url) {
+          b.textContent = old;
+          delete b.dataset.busy;
+          alert("Файл для скачивания пока не найден на сайте.");
+          return;
+        }
         var a = document.createElement("a");
         a.href = url;
         a.download = GAME.downloadName || "game.html";
@@ -218,4 +244,27 @@
   var itch = $("[data-itch]"), gh = $("[data-github]");
   if (GAME.itch)  { itch.href = GAME.itch;  itch.hidden = false; }
   if (GAME.github){ gh.href  = GAME.github; gh.hidden  = false; }
+
+  /* ---------- 7. Дата обновления игры (кладёт панель разработчика) ---------- */
+  fetch("version.json?t=" + Date.now(), { cache: "no-store" })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (v) {
+      if (!v || !v.updated) return;
+      var months = ["января", "февраля", "марта", "апреля", "мая", "июня",
+                    "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+      var d = new Date(v.updated);
+      var when = isNaN(d.getTime())
+        ? String(v.updated)
+        : d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear();
+      if (v.version) {
+        GAME.version = v.version;
+        $$("[data-version]").forEach(function (e) { e.textContent = v.version; });
+      }
+      var el = $("[data-updated]");
+      if (el) {
+        el.textContent = "Игра обновлена: " + when + (v.version ? " · версия " + v.version : "");
+        el.hidden = false;
+      }
+    })
+    .catch(function () { /* version.json ещё нет — просто молчим */ });
 })();

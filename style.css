@@ -96,6 +96,14 @@ h1{
   margin:20px auto 0;max-width:620px;
   font-size:clamp(17px,2.4vw,21px);color:var(--muted);
 }
+.demo-note{
+  display:inline-block;margin-top:24px;padding:11px 24px;border-radius:999px;
+  background:linear-gradient(135deg,rgba(255,196,0,.15),rgba(255,120,0,.10));
+  border:1px solid rgba(255,196,0,.42);
+  color:#ffd76a;font-size:15px;font-weight:600;
+  box-shadow:0 0 28px rgba(255,180,0,.16);
+}
+.demo-note b{color:#ffdf8a}
 .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:38px}
 .cta.center{margin-top:34px}
 .hint{margin-top:22px;color:var(--muted);font-size:14px;opacity:.8}
